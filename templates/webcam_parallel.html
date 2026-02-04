@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parallel Multi-Camera Detection</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .controls {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .control-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .control-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            background: white;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
+        }
+
+        .btn-polygon {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        }
+
+        .btn-clear {
+            background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+
+        .video-container {
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        #videoCanvas {
+            width: 100%;
+            display: block;
+            cursor: crosshair;
+        }
+
+        .no-video {
+            width: 100%;
+            height: 480px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2em;
+            background: #333;
+        }
+
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .panel-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .panel-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .camera-stats-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .camera-stat-item {
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .camera-stat-item.active {
+            border-left-color: #4CAF50;
+            background: #f0fff4;
+        }
+
+        .camera-controls {
+            display: flex;
+            gap: 5px;
+            margin-top: 8px;
+        }
+
+        .btn-mini {
+            padding: 4px 10px;
+            font-size: 0.75em;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+        }
+
+        .btn-mini:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .btn-mini:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-mini.start {
+            background: #4CAF50;
+        }
+
+        .btn-mini.stop {
+            background: #ff4444;
+        }
+
+        .btn-mini.pause {
+            background: #ff9800;
+        }
+
+        .camera-stat-label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .camera-stat-value {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .activity-log {
+            background: white;
+            border-radius: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .detection-summary {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .class-count-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .class-count-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .class-count-item .class-name {
+            font-size: 0.9em;
+            font-weight: 600;
+            margin-bottom: 5px;
+            text-transform: capitalize;
+        }
+
+        .class-count-item .class-count {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .current-status {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px solid #f0f0f0;
+        }
+
+        .status-box {
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .status-box.inside {
+            background: #f0fff4;
+            border: 2px solid #4CAF50;
+        }
+
+        .status-box.outside {
+            background: #fff5f5;
+            border: 2px solid #ff4444;
+        }
+
+        .status-box .status-label {
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #666;
+        }
+
+        .status-box .status-value {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .status-box.inside .status-value {
+            color: #4CAF50;
+        }
+
+        .status-box.outside .status-value {
+            color: #ff4444;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+        }
+
+        .log-entry.entered {
+            border-left-color: #4CAF50;
+            background: #f0fff4;
+        }
+
+        .log-entry.exited {
+            border-left-color: #ff4444;
+            background: #fff5f5;
+        }
+
+        .log-entry.global {
+            border-left-color: #ff9800;
+            background: #fff8e1;
+        }
+
+        .log-camera.global {
+            color: #ff9800;
+        }
+
+        .log-max-count {
+            background: #ff9800;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.85em;
+            margin-left: 8px;
+        }
+
+        .log-icon {
+            font-size: 1.5em;
+        }
+
+        .log-details {
+            flex: 1;
+        }
+
+        .log-camera {
+            font-size: 0.85em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+
+        .log-object {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .log-action {
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .log-action.entry {
+            color: #4CAF50;
+        }
+
+        .log-action.exit {
+            color: #ff4444;
+        }
+
+        .log-timestamp {
+            font-size: 0.8em;
+            color: #999;
+        }
+
+        .empty-log {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+        }
+
+        .drawing-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 100;
+            display: none;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .status-badge.running {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .status-badge.stopped {
+            background: #999;
+            color: white;
+        }
+
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Parallel Multi-Camera Detection</h1>
+            <p>All cameras run AI in parallel | View one feed at a time</p>
+        </div>
+
+        <div class="content">
+            <!-- Controls -->
+            <div class="controls">
+                <div class="control-row">
+                    <div class="control-group">
+                        <label>Select Camera to View</label>
+                        <select id="cameraSelect">
+                            <option value="0">Camera 0</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Confidence Threshold: <span id="confidenceValue" style="color: #667eea; font-weight: bold;">0.25</span></label>
+                        <input type="range" id="confidenceSlider" min="0.1" max="0.9" step="0.05" value="0.25" style="width: 100%; height: 8px; border-radius: 5px; background: #ddd; outline: none;">
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px;">
+                    <button class="btn btn-success" id="startAllBtn">🚀 Start All Cameras</button>
+                    <button class="btn btn-danger" id="stopAllBtn" style="display: none;">🛑 Stop All Cameras</button>
+                    <button class="btn btn-polygon" id="drawPolygonBtn">✏️ Draw Zone (Current Camera)</button>
+                    <button class="btn btn-clear" id="clearPolygonBtn">🗑️ Clear Zone</button>
+                    <button class="btn btn-clear" id="clearLogsBtn">🗑️ Clear All Logs</button>
+                    <button class="btn" id="statusBtn" style="background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);">🔍 Check System Status</button>
+                </div>
+            </div>
+
+            <!-- Main Grid -->
+            <div class="main-grid">
+                <!-- Video Feed -->
+                <div class="video-container">
+                    <div class="canvas-wrapper" id="canvasWrapper" style="display: none;">
+                        <canvas id="videoCanvas"></canvas>
+                        <div class="drawing-indicator" id="drawingIndicator"></div>
+                    </div>
+                    <div class="no-video" id="noVideo">
+                        Click "Start All Cameras" to begin
+                    </div>
+                </div>
+
+                <!-- Right Panel -->
+                <div class="right-panel">
+                    <!-- Camera Status -->
+                    <div class="panel-section">
+                        <h3>
+                            📹 Camera Status
+                        </h3>
+                        <div class="camera-stats-grid" id="cameraStatsGrid">
+                            <div class="empty-log">No cameras running</div>
+                        </div>
+                    </div>
+
+                    <!-- Activity Section -->
+                    <div class="panel-section">
+                        <h3>
+                            📊 Detection Summary
+                        </h3>
+                        <div id="detectionSummary" class="detection-summary">
+                            <div class="empty-log">No detections yet</div>
+                        </div>
+                    </div>
+
+                    <!-- Activity Log -->
+                    <div class="panel-section">
+                        <h3>
+                            📋 Activity Log
+                            <span style="font-size: 0.8em; font-weight: normal;">Total Events: <span id="totalEvents">0</span></span>
+                        </h3>
+                        <div class="activity-log" id="activityLog">
+                            <div class="empty-log">No activity yet</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const cameraSelect = document.getElementById('cameraSelect');
+        const confidenceSlider = document.getElementById('confidenceSlider');
+        const confidenceValue = document.getElementById('confidenceValue');
+        const startAllBtn = document.getElementById('startAllBtn');
+        const stopAllBtn = document.getElementById('stopAllBtn');
+        const drawPolygonBtn = document.getElementById('drawPolygonBtn');
+        const clearPolygonBtn = document.getElementById('clearPolygonBtn');
+        const clearLogsBtn = document.getElementById('clearLogsBtn');
+        const statusBtn = document.getElementById('statusBtn');
+        const canvasWrapper = document.getElementById('canvasWrapper');
+        const videoCanvas = document.getElementById('videoCanvas');
+        const noVideo = document.getElementById('noVideo');
+        const drawingIndicator = document.getElementById('drawingIndicator');
+        const activityLog = document.getElementById('activityLog');
+        const totalEvents = document.getElementById('totalEvents');
+        const cameraStatsGrid = document.getElementById('cameraStatsGrid');
+        const detectionSummary = document.getElementById('detectionSummary');
+
+        let currentCameraId = '0';
+        let allCamerasRunning = false;
+        let videoImage = new Image();
+        let isDrawingMode = false;
+        let tempPolygonPoints = [];
+        let polygonPoints = [];
+        let logInterval = null;
+        let statsInterval = null;
+
+        const ctx = videoCanvas.getContext('2d');
+
+        // Update confidence value display
+        confidenceSlider.addEventListener('input', (e) => {
+            confidenceValue.textContent = e.target.value;
+        });
+
+        // Populate camera dropdown
+        async function populateCameraDropdown() {
+            try {
+                const response = await fetch('/get_cameras');
+                const cameras = await response.json();
+
+                cameraSelect.innerHTML = '';
+                
+                if (cameras.length === 0) {
+                    const option = document.createElement('option');
+                    option.value = '0';
+                    option.textContent = 'No cameras detected';
+                    cameraSelect.appendChild(option);
+                    alert('⚠️ No cameras detected! Please check:\n\n1. Camera is connected\n2. Camera permissions\n3. No other apps using camera');
+                    console.error('❌ No cameras detected');
+                    return;
+                }
+                
+                cameras.forEach(cam => {
+                    const option = document.createElement('option');
+                    option.value = cam;
+                    option.textContent = `Camera ${cam}`;
+                    cameraSelect.appendChild(option);
+                });
+
+                if (cameras.length > 0) {
+                    currentCameraId = String(cameras[0]);
+                }
+                
+                console.log('✅ Available cameras:', cameras);
+                
+                if (cameras.length === 1) {
+                    console.log('ℹ️  Only one camera detected. Camera switching disabled.');
+                }
+            } catch (error) {
+                console.error('❌ Failed to get cameras:', error);
+                alert('Failed to detect cameras. Check console for details.');
+            }
+        }
+
+        // Setup video feed loop - FIXED VERSION
+        function setupVideoFeedLoop() {
+            videoImage.onload = function() {
+                // Capture current camera ID to prevent race conditions
+                const camIdSnapshot = currentCameraId;
+                getCameraStats().then(stats => {
+                    // Only continue if we're still on the same camera
+                    if (camIdSnapshot === currentCameraId && 
+                        stats && stats[currentCameraId] && stats[currentCameraId].is_running) {
+                        setTimeout(() => updateVideoFeed(), 33);
+                    }
+                });
+            };
+        }
+
+        // Camera selection change - FIXED VERSION
+        cameraSelect.addEventListener('change', async (e) => {
+            const oldCamera = currentCameraId;
+            currentCameraId = String(e.target.value);
+            console.log(`📹 Switching from Camera ${oldCamera} to Camera ${currentCameraId}`);
+            
+            // IMPORTANT: Stop the old video feed completely
+            videoImage.src = '';
+            videoImage.onload = null;  // Clear the onload handler
+            
+            // Hide video temporarily
+            canvasWrapper.style.display = 'none';
+            noVideo.style.display = 'flex';
+            noVideo.textContent = `Loading Camera ${currentCameraId}...`;
+            
+            // Wait for old feed to fully stop
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Check if the selected camera is running
+            const stats = await getCameraStats();
+            if (stats && stats[currentCameraId] && stats[currentCameraId].is_running) {
+                console.log(`✅ Camera ${currentCameraId} is running, starting video feed`);
+                
+                // Load polygon for new camera
+                await loadPolygonForCamera();
+                
+                // Reconnect the onload handler for the NEW camera
+                setupVideoFeedLoop();
+                
+                // Show video
+                canvasWrapper.style.display = 'block';
+                noVideo.style.display = 'none';
+                
+                // Start new video feed
+                updateVideoFeed();
+            } else {
+                console.log(`⚠️  Camera ${currentCameraId} is not running`);
+                noVideo.textContent = `Camera ${currentCameraId} is not running. Click "Start" to begin.`;
+            }
+        });
+
+        // Get camera stats helper
+        async function getCameraStats() {
+            try {
+                const response = await fetch('/get_camera_stats');
+                const data = await response.json();
+                return data.stats;
+            } catch (error) {
+                console.error('Error getting camera stats:', error);
+                return null;
+            }
+        }
+
+        // Check if any camera is running
+        async function checkAnyCameraRunning() {
+            const stats = await getCameraStats();
+            if (stats) {
+                const anyCameraRunning = Object.values(stats).some(stat => stat.is_running);
+                if (!anyCameraRunning) {
+                    canvasWrapper.style.display = 'none';
+                    noVideo.style.display = 'flex';
+                    noVideo.textContent = 'All cameras stopped. Start a camera to begin.';
+                    allCamerasRunning = false;
+                }
+            }
+        }
+
+        // Start all cameras - FIXED VERSION
+        async function startAllCameras() {
+            try {
+                const response = await fetch('/start_all_cameras', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({confidence: parseFloat(confidenceSlider.value)})
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    allCamerasRunning = true;
+                    startAllBtn.style.display = 'none';
+                    stopAllBtn.style.display = 'inline-block';
+                    
+                    // Wait a moment for cameras to start
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // Check if current camera is running
+                    const stats = await getCameraStats();
+                    if (stats && stats[currentCameraId] && stats[currentCameraId].is_running) {
+                        noVideo.style.display = 'none';
+                        canvasWrapper.style.display = 'block';
+                        await loadPolygonForCamera();
+                        
+                        // Set up the video feed loop and start it
+                        setupVideoFeedLoop();
+                        updateVideoFeed();
+                    }
+                    
+                    // Start periodic updates
+                    if (!logInterval) logInterval = setInterval(updateLogs, 1000);
+                    if (!statsInterval) statsInterval = setInterval(updateCameraStats, 1000);
+                    
+                    console.log(`✅ Started ${data.cameras_started.length} cameras`);
+                }
+            } catch (error) {
+                console.error('Error starting cameras:', error);
+            }
+        }
+
+        // Stop all cameras
+        async function stopAllCameras() {
+            try {
+                await fetch('/stop_all_cameras', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                allCamerasRunning = false;
+                startAllBtn.style.display = 'inline-block';
+                stopAllBtn.style.display = 'none';
+                
+                videoImage.src = '';
+                videoImage.onload = null;
+                canvasWrapper.style.display = 'none';
+                noVideo.style.display = 'flex';
+                noVideo.textContent = 'All cameras stopped';
+                
+                if (logInterval) {
+                    clearInterval(logInterval);
+                    logInterval = null;
+                }
+                if (statsInterval) {
+                    clearInterval(statsInterval);
+                    statsInterval = null;
+                }
+                
+                console.log('🛑 Stopped all cameras');
+            } catch (error) {
+                console.error('Error stopping cameras:', error);
+            }
+        }
+
+        // Update video feed - IMPROVED VERSION
+        function updateVideoFeed() {
+            const timestamp = new Date().getTime();
+            const feedUrl = `/video_feed?camera=${currentCameraId}&t=${timestamp}`;
+            console.log(`🎥 Requesting feed: ${feedUrl}`);
+            videoImage.src = feedUrl;
+        }
+
+        // Draw frame
+        function drawFrame() {
+            if (videoImage.complete && videoImage.naturalWidth > 0) {
+                videoCanvas.width = videoImage.naturalWidth;
+                videoCanvas.height = videoImage.naturalHeight;
+                ctx.drawImage(videoImage, 0, 0);
+                
+                // Draw polygon points
+                if (isDrawingMode && tempPolygonPoints.length > 0) {
+                    ctx.strokeStyle = 'lime';
+                    ctx.lineWidth = 3;
+                    ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(tempPolygonPoints[0].x, tempPolygonPoints[0].y);
+                    for (let i = 1; i < tempPolygonPoints.length; i++) {
+                        ctx.lineTo(tempPolygonPoints[i].x, tempPolygonPoints[i].y);
+                    }
+                    if (tempPolygonPoints.length > 2) {
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    ctx.stroke();
+                    
+                    // Draw points
+                    tempPolygonPoints.forEach(p => {
+                        ctx.fillStyle = 'red';
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+                        ctx.fill();
+                    });
+                }
+            }
+            
+            requestAnimationFrame(drawFrame);
+        }
+
+        // Load polygon for current camera
+        async function loadPolygonForCamera() {
+            try {
+                const response = await fetch(`/get_polygon?camera_id=${currentCameraId}`);
+                const data = await response.json();
+                polygonPoints = data.points || [];
+                console.log(`📍 Loaded ${polygonPoints.length} polygon points for Camera ${currentCameraId}`);
+            } catch (error) {
+                console.error('Error loading polygon:', error);
+            }
+        }
+
+        // Drawing polygon
+        function startDrawingPolygon() {
+            // Check if current camera is running
+            getCameraStats().then(stats => {
+                if (!stats || !stats[currentCameraId] || !stats[currentCameraId].is_running) {
+                    alert(`Camera ${currentCameraId} is not running! Start it first.`);
+                    return;
+                }
+
+                isDrawingMode = true;
+                tempPolygonPoints = [];
+                drawingIndicator.style.display = 'block';
+                drawingIndicator.innerHTML = `Drawing zone for Camera ${currentCameraId}<br>Click to add points. Press 'Enter' to finish or 'Esc' to cancel`;
+                drawPolygonBtn.textContent = '⏸️ Drawing...';
+                drawPolygonBtn.disabled = true;
+                
+                console.log(`🎨 Started drawing polygon for Camera ${currentCameraId}`);
+            });
+        }
+
+        async function finishDrawing() {
+            if (tempPolygonPoints.length >= 3) {
+                polygonPoints = tempPolygonPoints.map(p => [p.x, p.y]);
+                
+                console.log(`💾 Saving polygon for Camera ${currentCameraId}:`, polygonPoints);
+                
+                await fetch('/set_polygon', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        camera_id: currentCameraId,
+                        points: tempPolygonPoints
+                    })
+                });
+            }
+            isDrawingMode = false;
+            tempPolygonPoints = [];
+            drawingIndicator.style.display = 'none';
+            drawPolygonBtn.textContent = '✏️ Draw Zone (Current Camera)';
+            drawPolygonBtn.disabled = false;
+        }
+
+        function cancelDrawing() {
+            isDrawingMode = false;
+            tempPolygonPoints = [];
+            drawingIndicator.style.display = 'none';
+            drawPolygonBtn.textContent = '✏️ Draw Zone (Current Camera)';
+            drawPolygonBtn.disabled = false;
+        }
+
+        async function clearPolygon() {
+            polygonPoints = [];
+            tempPolygonPoints = [];
+            
+            await fetch('/clear_polygon', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({camera_id: currentCameraId})
+            });
+            
+            console.log(`✗ Polygon cleared for Camera ${currentCameraId}`);
+        }
+
+        // Update logs (from all cameras)
+        async function updateLogs() {
+            try {
+                const response = await fetch('/get_logs');
+                const data = await response.json();
+                
+                // Calculate current objects in zone and historical info
+                const currentClassCounts = {}; // Current objects in zone RIGHT NOW
+                const currentlyInside = new Set();
+                const currentlyOutside = new Set();
+                
+                if (data.logs && data.logs.length > 0) {
+                    // Track current state of each class
+                    const classStates = {};
+                    const maxCounts = {};
+                    
+                    data.logs.forEach(log => {
+                        const className = log.object;
+                        
+                        // Track state changes
+                        if (log.action === 'ENTERED') {
+                            classStates[className] = 'inside';
+                            // Store the current count when entered
+                            if (log.max_count) {
+                                maxCounts[className] = log.max_count;
+                            }
+                        } else if (log.action === 'EXITED') {
+                            classStates[className] = 'outside';
+                        }
+                    });
+                    
+                    // Build current counts (only objects currently inside)
+                    Object.entries(classStates).forEach(([className, state]) => {
+                        if (state === 'inside') {
+                            currentlyInside.add(className);
+                            // Use the last known max_count for this class
+                            currentClassCounts[className] = maxCounts[className] || 1;
+                        } else {
+                            currentlyOutside.add(className);
+                        }
+                    });
+                }
+                
+                // Update Detection Summary
+                if (Object.keys(currentClassCounts).length > 0 || currentlyInside.size > 0 || currentlyOutside.size > 0) {
+                    let summaryHTML = '';
+                    
+                    // Class counts grid - ONLY SHOW CURRENTLY INSIDE OBJECTS
+                    if (Object.keys(currentClassCounts).length > 0) {
+                        summaryHTML += '<div class="class-count-grid">';
+                        Object.entries(currentClassCounts).sort((a, b) => b[1] - a[1]).forEach(([className, count]) => {
+                            summaryHTML += `
+                                <div class="class-count-item">
+                                    <div class="class-name">${className}</div>
+                                    <div class="class-count">${count}</div>
+                                </div>
+                            `;
+                        });
+                        summaryHTML += '</div>';
+                    } else {
+                        summaryHTML += '<div style="text-align: center; color: #999; padding: 20px;">No objects in zone</div>';
+                    }
+                    
+                    // Current status
+                    summaryHTML += '<div class="current-status">';
+                    
+                    // Currently Inside (TOP - just count)
+                    summaryHTML += '<div class="status-box inside">';
+                    summaryHTML += '<div class="status-label">🟢 Currently Inside</div>';
+                    summaryHTML += `<div class="status-value">${currentlyInside.size}</div>`;
+                    summaryHTML += '</div>';
+                    
+                    // Recently Exited (BOTTOM - just count)
+                    summaryHTML += '<div class="status-box outside">';
+                    summaryHTML += '<div class="status-label">🔴 Previously Exited</div>';
+                    summaryHTML += `<div class="status-value">${currentlyOutside.size}</div>`;
+                    summaryHTML += '</div>';
+                    
+                    summaryHTML += '</div>';
+                    
+                    detectionSummary.innerHTML = summaryHTML;
+                } else {
+                    detectionSummary.innerHTML = '<div class="empty-log">No detections yet</div>';
+                }
+                
+                // Update Activity Log (showing entry/exit events)
+                if (data.logs && data.logs.length > 0) {
+                    totalEvents.textContent = data.logs.length;
+                    
+                    activityLog.innerHTML = '';
+                    
+                    // Show recent events (last 20)
+                    const recentLogs = data.logs.slice(-20).reverse();
+                    
+                    recentLogs.forEach(log => {
+                        const logEntry = document.createElement('div');
+                        const isGlobal = log.camera_id === 'GLOBAL';
+                        logEntry.className = `log-entry ${log.action.toLowerCase()} ${isGlobal ? 'global' : ''}`;
+                        
+                        const icon = log.action === 'ENTERED' ? '📥' : '📤';
+                        const actionClass = log.action === 'ENTERED' ? 'entry' : 'exit';
+                        const maxCountBadge = log.max_count ? `<span class="log-max-count">COUNT: ${log.max_count}</span>` : '';
+                        
+                        logEntry.innerHTML = `
+                            <div class="log-icon">${icon}</div>
+                            <div class="log-details">
+                                <div class="log-camera ${isGlobal ? 'global' : ''}">${isGlobal ? '🌍 GLOBAL' : `Camera ${log.camera_id}`}</div>
+                                <div class="log-object">${log.object} ${maxCountBadge}</div>
+                                <div class="log-action ${actionClass}">${log.action}</div>
+                                <div class="log-timestamp">${log.timestamp}</div>
+                            </div>
+                        `;
+                        activityLog.appendChild(logEntry);
+                    });
+                } else {
+                    activityLog.innerHTML = '<div class="empty-log">No activity yet</div>';
+                    totalEvents.textContent = '0';
+                }
+            } catch (error) {
+                console.error('Error updating logs:', error);
+            }
+        }
+
+        // Update camera stats
+        async function updateCameraStats() {
+            try {
+                const response = await fetch('/get_camera_stats');
+                const data = await response.json();
+                
+                if (data.stats && Object.keys(data.stats).length > 0) {
+                    cameraStatsGrid.innerHTML = '';
+                    
+                    Object.entries(data.stats).forEach(([camId, stats]) => {
+                        const statItem = document.createElement('div');
+                        statItem.className = `camera-stat-item ${stats.is_running ? 'active' : ''}`;
+                        
+                        const statusBadge = stats.is_running 
+                            ? '<span class="status-badge running">Running</span>'
+                            : '<span class="status-badge stopped">Stopped</span>';
+                        
+                        statItem.innerHTML = `
+                            <div style="width: 100%;">
+                                <div class="camera-stat-label">Camera ${camId} ${statusBadge}</div>
+                                <div class="camera-stat-value">
+                                    In Zone: ${stats.in_zone} | Total: ${stats.total_detections} | FPS: ${stats.fps.toFixed(1)}
+                                </div>
+                                <div class="camera-controls">
+                                    <button class="btn-mini start" onclick="startIndividualCamera('${camId}')" ${stats.is_running ? 'disabled' : ''}>
+                                        ▶️ Start
+                                    </button>
+                                    <button class="btn-mini pause" onclick="pauseIndividualCamera('${camId}')" ${!stats.is_running ? 'disabled' : ''}>
+                                        ⏸️ Pause
+                                    </button>
+                                    <button class="btn-mini stop" onclick="stopIndividualCamera('${camId}')" ${!stats.is_running ? 'disabled' : ''}>
+                                        ⏹️ Stop
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        
+                        cameraStatsGrid.appendChild(statItem);
+                    });
+                } else {
+                    cameraStatsGrid.innerHTML = '<div class="empty-log">No cameras detected</div>';
+                }
+            } catch (error) {
+                console.error('Error updating camera stats:', error);
+            }
+        }
+
+        async function clearLogs() {
+            await fetch('/clear_logs', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            activityLog.innerHTML = '<div class="empty-log">Logs cleared</div>';
+            detectionSummary.innerHTML = '<div class="empty-log">No detections yet</div>';
+            totalEvents.textContent = '0';
+        }
+
+        async function checkSystemStatus() {
+            try {
+                const response = await fetch('/get_system_status');
+                const status = await response.json();
+                
+                console.log('🔍 SYSTEM STATUS:', status);
+                
+                let message = '=== SYSTEM STATUS ===\n\n';
+                message += `Available Cameras: ${status.available_cameras.join(', ')}\n`;
+                message += `Initialized Cameras: ${status.initialized_cameras.join(', ')}\n\n`;
+                
+                message += 'Camera Details:\n';
+                for (const [camId, details] of Object.entries(status.camera_details)) {
+                    message += `\nCamera ${camId}:\n`;
+                    message += `  - Running: ${details.is_running}\n`;
+                    message += `  - Thread Alive: ${details.thread_alive}\n`;
+                    message += `  - Has Frame: ${details.has_frame}\n`;
+                    message += `  - Has Capture: ${details.has_cap}\n`;
+                    message += `  - FPS: ${details.fps.toFixed(1)}\n`;
+                    message += `  - Objects in Zone: ${JSON.stringify(details.objects_in_zone)}\n`;
+                }
+                
+                alert(message);
+                console.log(message);
+            } catch (error) {
+                console.error('Error checking system status:', error);
+                alert('Error checking system status: ' + error.message);
+            }
+        }
+
+        // Individual camera controls - FIXED VERSION
+        async function startIndividualCamera(cameraId) {
+            console.log(`🎬 Starting Camera ${cameraId}...`);
+            
+            try {
+                const response = await fetch('/start_camera', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        camera_id: parseInt(cameraId),
+                        confidence: parseFloat(confidenceSlider.value)
+                    })
+                });
+                const data = await response.json();
+                
+                console.log(`📡 Start camera response:`, data);
+                
+                if (data.success) {
+                    console.log(`✅ Started Camera ${cameraId}`);
+                    
+                    // Start intervals if not already running
+                    if (!logInterval) {
+                        console.log('🔄 Starting log interval');
+                        logInterval = setInterval(updateLogs, 1000);
+                    }
+                    if (!statsInterval) {
+                        console.log('🔄 Starting stats interval');
+                        statsInterval = setInterval(updateCameraStats, 1000);
+                    }
+                    
+                    // Wait for camera to initialize
+                    console.log(`⏳ Waiting for Camera ${cameraId} to initialize...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // Verify camera is actually running
+                    const stats = await getCameraStats();
+                    console.log(`📊 Camera stats after start:`, stats);
+                    
+                    if (stats && stats[cameraId] && stats[cameraId].is_running) {
+                        console.log(`✅ Camera ${cameraId} confirmed running`);
+                        
+                        // If this is the currently selected camera, show video
+                        if (cameraId === currentCameraId) {
+                            console.log(`📺 Showing video for Camera ${cameraId}`);
+                            canvasWrapper.style.display = 'block';
+                            noVideo.style.display = 'none';
+                            await loadPolygonForCamera();
+                            
+                            // Set up video feed loop and start
+                            setupVideoFeedLoop();
+                            updateVideoFeed();
+                        }
+                    } else {
+                        console.warn(`⚠️  Camera ${cameraId} not confirmed as running`);
+                        alert(`Camera ${cameraId} may not have started properly. Check if the camera is connected.`);
+                    }
+                    
+                    // Update stats immediately
+                    setTimeout(updateCameraStats, 500);
+                } else {
+                    console.error(`❌ Failed to start camera ${cameraId}:`, data.message);
+                    alert(`Failed to start camera ${cameraId}: ${data.message || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error(`❌ Error starting camera ${cameraId}:`, error);
+                alert(`Error starting camera ${cameraId}: ${error.message}`);
+            }
+        }
+
+        async function pauseIndividualCamera(cameraId) {
+            try {
+                const response = await fetch('/pause_camera', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({camera_id: cameraId})
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log(`⏸️ Paused Camera ${cameraId}`);
+                    
+                    // If this is the currently viewed camera, hide video
+                    if (cameraId === currentCameraId) {
+                        videoImage.src = '';
+                        videoImage.onload = null;
+                        canvasWrapper.style.display = 'none';
+                        noVideo.style.display = 'flex';
+                        noVideo.textContent = `Camera ${cameraId} is paused`;
+                    }
+                    
+                    // Check if all cameras are stopped
+                    setTimeout(checkAnyCameraRunning, 500);
+                    setTimeout(updateCameraStats, 500);
+                }
+            } catch (error) {
+                console.error(`Error pausing camera ${cameraId}:`, error);
+            }
+        }
+
+        async function stopIndividualCamera(cameraId) {
+            try {
+                const response = await fetch('/stop_camera', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({camera_id: cameraId})
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log(`🛑 Stopped Camera ${cameraId}`);
+                    
+                    // If this is the currently viewed camera, hide video
+                    if (cameraId === currentCameraId) {
+                        videoImage.src = '';
+                        videoImage.onload = null;
+                        canvasWrapper.style.display = 'none';
+                        noVideo.style.display = 'flex';
+                        noVideo.textContent = `Camera ${cameraId} is stopped`;
+                    }
+                    
+                    // Check if all cameras are stopped
+                    setTimeout(checkAnyCameraRunning, 500);
+                    setTimeout(updateCameraStats, 500);
+                }
+            } catch (error) {
+                console.error(`Error stopping camera ${cameraId}:`, error);
+            }
+        }
+
+        // Canvas click for polygon drawing
+        videoCanvas.addEventListener('click', (e) => {
+            if (!isDrawingMode) return;
+
+            const rect = videoCanvas.getBoundingClientRect();
+            const scaleX = videoCanvas.width / rect.width;
+            const scaleY = videoCanvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+
+            tempPolygonPoints.push({x, y});
+            console.log(`Added point ${tempPolygonPoints.length} at (${Math.round(x)}, ${Math.round(y)})`);
+        });
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (!isDrawingMode) return;
+
+            if (e.key === 'Enter' && tempPolygonPoints.length >= 3) {
+                finishDrawing();
+            } else if (e.key === 'Escape') {
+                cancelDrawing();
+            }
+        });
+
+        // Event listeners
+        startAllBtn.addEventListener('click', startAllCameras);
+        stopAllBtn.addEventListener('click', stopAllCameras);
+        drawPolygonBtn.addEventListener('click', startDrawingPolygon);
+        clearPolygonBtn.addEventListener('click', clearPolygon);
+        clearLogsBtn.addEventListener('click', clearLogs);
+        statusBtn.addEventListener('click', checkSystemStatus);
+
+        // Initialize
+        populateCameraDropdown().then(() => {
+            drawFrame();
+            // Set up initial video feed loop
+            setupVideoFeedLoop();
+            // Start periodic updates immediately to detect any already-running cameras
+            logInterval = setInterval(updateLogs, 1000);
+            statsInterval = setInterval(updateCameraStats, 1000);
+        });
+    </script>
+</body>
+</html>
